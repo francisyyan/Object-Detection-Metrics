@@ -103,7 +103,7 @@ def getBoundingBoxes(directory,
         allClasses = []
     # Read ground truths
     os.chdir(directory)
-    files = glob.glob("*.txt")
+    files = glob.glob("*.csv")
     files.sort()
     # Read GT detections from txt file
     # Each line of the files in the groundtruths folder represents a ground truth bounding box
@@ -113,20 +113,19 @@ def getBoundingBoxes(directory,
     # x, y represents the most top-left coordinates of the bounding box
     # x2, y2 represents the most bottom-right coordinates of the bounding box
     for f in files:
-        nameOfImage = f.replace(".txt", "")
+        nameOfImage = os.path.splitext(f)[0]
         fh1 = open(f, "r")
         for line in fh1:
-            line = line.replace("\n", "")
-            if line.replace(' ', '') == '':
-                continue
-            splitLine = line.split(" ")
+            splitLine = line.split(',')
+
+            idClass = (splitLine[0])  # class
+            confidence = float(splitLine[1])
+            x = float(splitLine[2])
+            y = float(splitLine[3])
+            w = float(splitLine[4])
+            h = float(splitLine[5])
+
             if isGT:
-                # idClass = int(splitLine[0]) #class
-                idClass = (splitLine[0])  # class
-                x = float(splitLine[1])
-                y = float(splitLine[2])
-                w = float(splitLine[3])
-                h = float(splitLine[4])
                 bb = BoundingBox(
                     nameOfImage,
                     idClass,
@@ -139,13 +138,6 @@ def getBoundingBoxes(directory,
                     BBType.GroundTruth,
                     format=bbFormat)
             else:
-                # idClass = int(splitLine[0]) #class
-                idClass = (splitLine[0])  # class
-                confidence = float(splitLine[1])
-                x = float(splitLine[2])
-                y = float(splitLine[3])
-                w = float(splitLine[4])
-                h = float(splitLine[5])
                 bb = BoundingBox(
                     nameOfImage,
                     idClass,
@@ -183,14 +175,14 @@ parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + V
 parser.add_argument(
     '-gt',
     '--gtfolder',
-    dest='gtFolder',
+    dest='gtFolderRel',
     default=os.path.join(currentPath, 'groundtruths'),
     metavar='',
     help='folder containing your ground truth bounding boxes')
 parser.add_argument(
     '-det',
     '--detfolder',
-    dest='detFolder',
+    dest='detFolderRel',
     default=os.path.join(currentPath, 'detections'),
     metavar='',
     help='folder containing your detected bounding boxes')
@@ -239,14 +231,18 @@ parser.add_argument(
     metavar='',
     help='image size. Required if -gtcoords or -detcoords are \'rel\'')
 parser.add_argument(
-    '-sp', '--savepath', dest='savePath', metavar='', help='folder where the plots are saved')
+    '-sp', '--savepath', dest='savePathRel', metavar='',
+    help='folder where the plots are saved')
 parser.add_argument(
-    '-np',
-    '--noplot',
+    '--show',
     dest='showPlot',
-    action='store_false',
-    help='no plot is shown during execution')
+    action='store_true',
+    help='show plot during execution')
 args = parser.parse_args()
+
+args.gtFolder = os.path.abspath(args.gtFolderRel)
+args.detFolder = os.path.abspath(args.detFolderRel)
+args.savePath = os.path.abspath(args.savePathRel) if args.savePathRel else None
 
 iouThreshold = args.iouThreshold
 
@@ -321,19 +317,25 @@ acc_AP = 0
 validClasses = 0
 
 # Plot Precision x Recall curve
-detections = evaluator.PlotPrecisionRecallCurve(
-    allBoundingBoxes,  # Object containing all bounding boxes (ground truths and detections)
-    IOUThreshold=iouThreshold,  # IOU threshold
-    method=MethodAveragePrecision.EveryPointInterpolation,
-    showAP=True,  # Show Average Precision in the title of the plot
-    showInterpolatedPrecision=False,  # Don't plot the interpolated precision curve
-    savePath=savePath,
-    showGraphic=showPlot)
+detections = evaluator.GetPascalVOCMetrics(
+    allBoundingBoxes, iouThreshold,
+    MethodAveragePrecision.EveryPointInterpolation)
 
-f = open(os.path.join(savePath, 'results.txt'), 'w')
-f.write('Object Detection Metrics\n')
-f.write('https://github.com/rafaelpadilla/Object-Detection-Metrics\n\n\n')
-f.write('Average Precision (AP), Precision and Recall per class:')
+# detections = evaluator.PlotPrecisionRecallCurve(
+#     allBoundingBoxes,  # Object containing all bounding boxes (ground truths and detections)
+#     IOUThreshold=iouThreshold,  # IOU threshold
+#     method=MethodAveragePrecision.EveryPointInterpolation,
+#     showAP=True,  # Show Average Precision in the title of the plot
+#     showInterpolatedPrecision=False,  # Don't plot the interpolated precision curve
+#     savePath=savePath,
+#     showGraphic=showPlot)
+
+f = None
+if args.savePath is not None:
+    f = open(os.path.join(savePath, 'results.txt'), 'w')
+    f.write('Object Detection Metrics\n')
+    f.write('https://github.com/rafaelpadilla/Object-Detection-Metrics\n\n\n')
+    f.write('Average Precision (AP), Precision and Recall per class:')
 
 # each detection is a class
 for metricsPerClass in detections:
@@ -355,12 +357,14 @@ for metricsPerClass in detections:
         ap_str = "{0:.2f}%".format(ap * 100)
         # ap_str = "{0:.4f}%".format(ap * 100)
         print('AP: %s (%s)' % (ap_str, cl))
-        f.write('\n\nClass: %s' % cl)
-        f.write('\nAP: %s' % ap_str)
-        f.write('\nPrecision: %s' % prec)
-        f.write('\nRecall: %s' % rec)
+        if f:
+            f.write('\n\nClass: %s' % cl)
+            f.write('\nAP: %s' % ap_str)
+            f.write('\nPrecision: %s' % prec)
+            f.write('\nRecall: %s' % rec)
 
 mAP = acc_AP / validClasses
 mAP_str = "{0:.2f}%".format(mAP * 100)
 print('mAP: %s' % mAP_str)
-f.write('\n\n\nmAP: %s' % mAP_str)
+if f:
+    f.write('\n\n\nmAP: %s' % mAP_str)

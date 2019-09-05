@@ -72,6 +72,7 @@ class Evaluator:
                     bb.getConfidence(),
                     bb.getAbsoluteBoundingBox(BBFormat.XYX2Y2)
                 ])
+
             # get class
             if bb.getClassId() not in classes:
                 classes.append(bb.getClassId())
@@ -79,13 +80,18 @@ class Evaluator:
         # Precision x Recall is obtained individually by each class
         # Loop through by classes
         for c in classes:
-            # Get only detection of class c
-            dects = []
-            [dects.append(d) for d in detections if d[1] == c]
             # Get only ground truths of class c
             gts = []
             [gts.append(g) for g in groundTruths if g[1] == c]
+
             npos = len(gts)
+            if npos == 0:
+                continue
+
+            # Get only detection of class c
+            dects = []
+            [dects.append(d) for d in detections if d[1] == c]
+
             # sort detections by decreasing confidence
             dects = sorted(dects, key=lambda conf: conf[2], reverse=True)
             TP = np.zeros(len(dects))
