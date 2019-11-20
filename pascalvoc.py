@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 ###########################################################################################
 #                                                                                         #
 # This sample shows how to evaluate object detections applying the following metrics:     #
@@ -330,12 +332,7 @@ detections = evaluator.GetPascalVOCMetrics(
 #     savePath=savePath,
 #     showGraphic=showPlot)
 
-f = None
-if args.savePath is not None:
-    f = open(os.path.join(savePath, 'results.txt'), 'w')
-    f.write('Object Detection Metrics\n')
-    f.write('https://github.com/rafaelpadilla/Object-Detection-Metrics\n\n\n')
-    f.write('Average Precision (AP), Precision and Recall per class:')
+print('Average Precision (AP), Precision and Recall per class:')
 
 # each detection is a class
 for metricsPerClass in detections:
@@ -349,22 +346,21 @@ for metricsPerClass in detections:
     total_TP = metricsPerClass['total TP']
     total_FP = metricsPerClass['total FP']
 
-    if totalPositives > 0:
+    if totalPositives > 0 and total_TP + total_FP > 0:
         validClasses = validClasses + 1
         acc_AP = acc_AP + ap
-        prec = ['%.2f' % p for p in precision]
-        rec = ['%.2f' % r for r in recall]
         ap_str = "{0:.2f}%".format(ap * 100)
-        # ap_str = "{0:.4f}%".format(ap * 100)
-        print('AP: %s (%s)' % (ap_str, cl))
-        if f:
-            f.write('\n\nClass: %s' % cl)
-            f.write('\nAP: %s' % ap_str)
-            f.write('\nPrecision: %s' % prec)
-            f.write('\nRecall: %s' % rec)
+        prec = total_TP / (total_TP + total_FP)
+        rec = total_TP / totalPositives
+
+        print('\nClass: %s' % cl)
+        print('AP: %s' % ap_str)
+        print('Precision: {:.2f}%'.format(prec * 100))
+        print('Recall: {:.2f}%'.format(rec * 100))
+        print('Ground truth positives: %d' % totalPositives)
+        print('True Positive detections: %d' % total_TP)
+        print('False Positive detections: %d' % total_FP)
 
 mAP = acc_AP / validClasses
 mAP_str = "{0:.2f}%".format(mAP * 100)
 print('mAP: %s' % mAP_str)
-if f:
-    f.write('\n\n\nmAP: %s' % mAP_str)
